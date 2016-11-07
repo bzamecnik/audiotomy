@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+  body {
+    font: 12px Arial;
+  }
+
+  path {
+    stroke: steelblue;
+    stroke-width: 2;
+    fill: none;
+  }
+  svg {
+    border: 1px solid #ddd;
+  }
+  .point {
+    r: 3;
+    fill: red;
+  }
+</style>
+
+<body>
+
+  <p>A very basic line plot.</p>
+
+  <!-- load the d3.js library -->
+  <script src="http://d3js.org/d3.v3.min.js"></script>
+
+  <script>
+    var width = 600,
+      height = 270;
+
+    var x = d3.time.scale().range([0, width]);
+    var y = d3.scale.linear().range([height, 0]);
+
+    var valueline = d3.svg.line()
+      .x(function(d) {
+        return x(d.x);
+      })
+      .y(function(d) {
+        return y(d.y);
+      });
+
+    var svg = d3.select("body")
+      .append("svg")
+      .attr("width", width)
+      .attr("height", height);
+
+    d3.tsv("line-plot.tsv", function(error, data) {
+      data.forEach(function(d, i) {
+        d.x = i;
+        d.y = +d.close;
+      });
+
+      x.domain(d3.extent(data, function(d) {
+        return d.x;
+      }));
+      y.domain([0, d3.max(data, function(d) {
+        return d.y;
+      })]);
+
+      // polyline
+      svg.append("path")
+        .attr("class", "line")
+        .attr("d", valueline(data));
+
+      // bonus: node points
+      svg.selectAll(".point")
+        .data(data)
+        .enter()
+        .append("circle")
+          .attr("class", "point")
+          .attr("cx", function(d) { return x(d.x); })
+          .attr("cy", function(d) { return y(d.y); })
+    });
+  </script>
+</body>
