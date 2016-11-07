@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Audio player</title>
+  <style type="text/css">
+    body {
+      font-family: sans-serif;
+    }
+
+    #chart {
+      border: 1px solid #eee;
+    }
+
+    #chart .cursor .needle {
+      stroke: hsla(0, 0%, 0%, 0.3);
+    }
+
+    #chart .cursor .drag-area {
+      stroke: hsla(0, 50%, 95%, 0.01);
+      stroke-width: 10;
+      cursor: ew-resize;
+    }
+
+    #chart .cursor polygon {
+      fill: hsla(0, 0%, 0%, 0.3);
+    }
+
+    .axis text {
+      font-size: 10px;
+    }
+
+    .axis path,
+    .axis line {
+      fill: none;
+      stroke: #000;
+      shape-rendering: crispEdges;
+    }
+  </style>
+
+</head>
+
+<body>
+
+  <p>X:
+    <span id="xValue">0</span>
+  </p>
+
+  <svg id="chart"></svg>
+
+  <script src="d3.v3.min.js" charset="utf-8"></script>
+  <script>
+    "use strict";
+
+    function timelineChart() {
+
+      var margin = {
+        top: 10,
+        right: 10,
+        bottom: 25,
+        left: 30
+      };
+
+      var width = 500,
+        height = 100,
+        innerWidth = width - margin.left - margin.right,
+        innerHeight = height - margin.top - margin.bottom;
+
+      var x = d3.scale.linear()
+        .domain([0, 1])
+        .range([0, innerWidth])
+        .clamp(true);
+
+      var xAxis = d3.svg.axis()
+        .scale(x)
+        .orient("bottom");
+
+
+      var drag = d3.behavior.drag()
+        .on("drag", function(d, i) {
+          var value = x.invert(d3.event.x);
+          d3.select(this)
+            .datum(value)
+            .attr("transform", function(d, i) {
+              return "translate(" + x(d) + ", 0)"
+            });
+          d3.select("#xValue")
+            .datum(value)
+            .text(function(d) {
+              return d;
+            });
+        });
+
+      function chart(selection) {
+        selection.each(function(value) {
+          var chart = selection
+            .attr("class", "chart")
+            .attr("width", width)
+            .attr("height", height)
+            .append("g")
+            .attr("class", "segments")
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+          chart.append("g")
+            .attr("class", "x axis")
+            .attr("transform", "translate(0," + innerHeight + ")")
+            .call(xAxis);
+
+          var cursor = chart.append("g")
+            .attr("class", "cursor")
+            .attr("transform", "translate(" + x(value) + ",0)")
+            .call(drag);
+
+          cursor.append("line")
+            .attr("class", "needle")
+            .attr("y2", innerHeight);
+          cursor.append("line")
+            .attr("class", "drag-area")
+            .attr("y2", innerHeight);
+          cursor.append("polygon")
+            .attr("points", "-5,-5 0,0 5,-5");
+          cursor.append("polygon")
+            .attr("points", "-5,5 0,0 5,5")
+            .attr("transform", "translate(0, " + innerHeight + ")");
+
+          d3.select("#xValue").datum(value).text(function(d) {
+            return d;
+          });
+        });
+      };
+
+      return chart;
+    }
+
+    d3.select("#chart")
+      .datum(0.25)
+      .call(timelineChart());
+  </script>
+</body>
+
+</html>
