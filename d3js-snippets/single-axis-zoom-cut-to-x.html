@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Simpe Single Axis Zoom</title>
+<script src="d3.v3.min.js"></script>
+<style>
+  .axis path,
+  .axis line {
+    fill: none;
+    stroke: #000;
+    shape-rendering: crispEdges;
+  }
+</style>
+
+<body>
+  <div id="chart"></div>
+  <script>
+    var data = [];
+    for (var i = 0; i < 100; i++) {
+      data.push([Math.random(), Math.random()]);
+    }
+
+    var ex_chart = example();
+
+    d3.select('#chart')
+      .append("svg")
+      .attr("width", window.innerWidth)
+      .attr("height", window.innerHeight)
+      .datum(data)
+      .call(ex_chart);
+
+    function example() {
+      var svg;
+      var margin = {
+        top: 60,
+        bottom: 80,
+        left: 60,
+        right: 0
+      };
+      var width = 500;
+      var height = 400;
+
+      var innerWidth = width - margin.left - margin.right;
+      var innerHeight = height - margin.top - margin.bottom;
+
+      var xaxis = d3.svg.axis();
+      var yaxis = d3.svg.axis();
+      var xscale = d3.scale.linear();
+      var yscale = d3.scale.linear();
+
+      function make_zoom() {
+        return d3.behavior.zoom()
+          .x(xscale)
+          .on("zoom", draw);
+      }
+
+      var xzoom = make_zoom();
+
+      function chart(selection) {
+        selection.each(function(data) {
+          svg = d3.select(this).selectAll('svg').data([data]);
+          svg.enter().append('svg');
+          var g = svg.append('g')
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+          g.append("defs").append("clipPath")
+            .attr("id", "clip")
+            .append("rect")
+            .attr("width", innerWidth)
+            .attr("height", innerHeight);
+
+          g.append("svg:rect")
+            .attr("class", "border")
+            .attr("width", innerWidth)
+            .attr("height", innerHeight)
+            .style("stroke", "black")
+            .style("fill", "none");
+
+          g.append("g").attr("class", "x axis")
+            .attr("transform", "translate(" + 0 + "," + (innerHeight) + ")");
+
+          g.append("g").attr("class", "y axis");
+
+          g.append("g")
+            .attr("class", "scatter")
+            .attr("clip-path", "url(#clip)");
+
+          g.append("svg:rect")
+            .attr("class", "zoom x box")
+            .attr("width", innerWidth)
+            .attr("height", innerHeight)
+            .style("visibility", "hidden")
+            .attr("pointer-events", "all")
+            .call(xzoom);
+
+          // Update the x-axis
+          xscale.domain(d3.extent(data, function(d) {
+              return d[0];
+            }))
+            .range([0, innerWidth]);
+
+          xaxis.scale(xscale)
+            .orient('bottom')
+            .tickPadding(10);
+
+          svg.select('g.x.axis').call(xaxis);
+
+          // Update the y-scale.
+          yscale
+            .range([innerHeight, 0])
+            .domain(d3.extent(data, function(d) {
+              return d[1];
+            }));
+
+          yaxis.scale(yscale)
+            .orient('left')
+            .tickPadding(10);
+
+          svg.select('g.y.axis').call(yaxis);
+
+          draw();
+        });
+
+        return chart;
+      }
+
+      function update() {
+        var gs = svg.select("g.scatter");
+
+        var circle = gs.selectAll("circle")
+          .data(function(d) {
+            return d;
+          });
+
+        circle.enter().append("svg:circle")
+          .attr("class", "points")
+          .style("fill", "steelblue")
+          .attr("cx", function(d) {
+            return X(d);
+          })
+          .attr("cy", function(d) {
+            return Y(d);
+          })
+          .attr("r", 4);
+
+        circle.attr("cx", function(d) {
+            return X(d);
+          })
+          .attr("cy", function(d) {
+            return Y(d);
+          });
+
+        circle.exit().remove();
+      }
+
+      function zoom_update() {
+        xzoom = make_zoom();
+        svg.select('rect.zoom.x.box').call(xzoom);
+      }
+
+      function draw() {
+        svg.select('g.x.axis').call(xaxis);
+
+        update();
+        zoom_update();
+      };
+
+      // X value to scale
+
+      function X(d) {
+        return xscale(d[0]);
+      }
+
+      // Y value to scale
+
+      function Y(d) {
+        return yscale(d[1]);
+      }
+
+      return chart;
+    }
+  </script>
