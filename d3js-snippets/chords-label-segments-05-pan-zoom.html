@@ -1,0 +1,124 @@
+<html>
+
+<head>
+  <style>
+    body {
+      font-family: sans-serif;
+    }
+
+    .chart {
+      border: 1px solid #eee;
+    }
+
+    .chart rect {
+      fill: steelblue;
+      stroke: darkblue;
+    }
+
+    .chart .segment text {
+      font-size: 10px;
+      text-anchor: beginning;
+    }
+
+    .axis text {
+      font-size: 10px;
+    }
+
+    .axis path,
+    .axis line {
+      fill: none;
+      stroke: #000;
+      shape-rendering: crispEdges;
+    }
+  </style>
+</head>
+
+<body>
+  <script src="d3.v3.min.js" charset="utf-8"></script>
+  <script>
+    var fileName = "data-beatles/chordlab/The_Beatles/03_-_A_Hard_Day's_Night/05_-_And_I_Love_Her.lab.pcs.tsv";
+
+    d3.select("body")
+      .append("p")
+      .text(fileName);
+
+    function parseRow(row) {
+      row.start = +row.start;
+      row.end = +row.end;
+      return row;
+    }
+
+    var margin = {
+      top: 10,
+      right: 10,
+      bottom: 25,
+      left: 65
+    };
+
+    var width = 1000,
+      height = 300,
+      innerWidth = width - margin.left - margin.right,
+      innerHeight = height - margin.top - margin.bottom;
+
+    var x = d3.scale.linear();
+    var y = d3.scale.ordinal();
+
+    var xAxis = d3.svg.axis()
+      .scale(x)
+      .orient("bottom");
+
+    var yAxis = d3.svg.axis()
+      .scale(y)
+      .orient("left");
+
+    // zoom by "Simplest way to add zoom/pan on d3.js" (Coderwall)
+
+    var chart = d3.select("body")
+      .append("svg")
+      .attr("class", "chart")
+      .attr("width", width)
+      .attr("height", height)
+      .append("g")
+      .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    d3.tsv(fileName, parseRow, function(error, data) {
+      x.range([0, innerWidth])
+        .domain([0, d3.max(data, function(d) {
+          return d.end;
+        })]);
+
+      y.rangeRoundBands([0, innerHeight], .1)
+        .domain(data.map(function(d) {
+          return d.label;
+        }));
+
+      var bar = chart.selectAll("g")
+        .data(data)
+        .enter().append("g")
+        .attr("class", "segment")
+        .attr("transform", function(d, i) {
+          return "translate(" + x(d.start) + ", 0)";
+        });
+
+      bar.append("rect")
+        .attr("width", function(d) {
+          return x(d.end - d.start);
+        })
+        .attr("height", y.rangeBand())
+        .attr("y", function(d) {
+          return y(d.label);
+        });
+
+      chart.append("g")
+        .attr("class", "x axis")
+        .attr("transform", "translate(0," + innerHeight + ")")
+        .call(xAxis);
+
+      chart.append("g")
+        .attr("class", "y axis")
+        // .attr("transform", "translate(0," + innerHeight + ")")
+        .call(yAxis);
+    });
+  </script>
+</body>
+<html>

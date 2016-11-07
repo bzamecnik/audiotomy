@@ -1,0 +1,78 @@
+<html>
+
+<head>
+  <style>
+    .chart {
+      background-color: #eee;
+    }
+
+    .chart rect {
+      fill: steelblue;
+    }
+
+    .chart text {
+      fill: white;
+      font: 20px sans-serif;
+      text-anchor: beginning;
+    }
+
+    .root rect {
+      fill: #c33;
+    }
+  </style>
+</head>
+
+<body>
+  <svg class="chart"></svg>
+
+  <script src="d3.v3.min.js" charset="utf-8"></script>
+  <script>
+    var data = [
+      {"from": 0, "to": 50, "tone": 0, "root": true},
+      {"from": 0, "to": 50, "tone": 4},
+      {"from": 0, "to": 50, "tone": 7},
+      {"from": 50, "to": 100, "tone": 2},
+      {"from": 50, "to": 100, "tone": 5},
+      {"from": 50, "to": 100, "tone": 7, "root": true},
+      {"from": 50, "to": 100, "tone": 11}
+    ];
+
+    var width = 600,
+      height = 400;
+
+    var barHeight = height / 12.0;
+
+    var x = d3.scale.linear()
+      .domain([0, 100])
+      .range([0, width]);
+
+    var y = d3.scale.linear()
+      .domain([0, 12])
+      .range([0, height]);
+
+    var chart = d3.select(".chart")
+      .attr("width", width)
+      .attr("height", height);
+
+    var bar = chart.selectAll("g")
+      .data(data)
+      .enter().append("g")
+      .attr("transform", function(d, i) {
+        return "translate(" + x(d.from) + ", " + y(d.tone) + ")";
+      })
+      .attr("class", function(d) { if (d.root) return "root"; });
+
+    bar.append("rect")
+      .attr("width", function(d) { return x(d.to - d.from); })
+      .attr("height", barHeight - 1);
+
+    bar.append("text")
+      .attr("dx", 5)
+      .attr("y", barHeight / 2)
+      .attr("dy", "0.35em")
+      .text(function(d) {
+        return d.tone;
+      });
+  </script>
+</body>
+<html>

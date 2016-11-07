@@ -1,0 +1,72 @@
+<html>
+
+<head>
+  <style>
+    .chart {
+      background-color: #eee;
+    }
+
+    .chart rect {
+      fill: steelblue;
+    }
+
+    .chart text {
+      fill: white;
+      font: 10px sans-serif;
+      text-anchor: beginning;
+    }
+  </style>
+</head>
+
+<body>
+  <svg class="chart"></svg>
+
+  <script src="d3.v3.min.js" charset="utf-8"></script>
+  <script>
+    var fileName = "02_-_The_Night_Before.lab.pcs.tsv";
+
+    var width = 1000,
+      height = 200;
+
+    var chart = d3.select(".chart")
+      .attr("width", width)
+      .attr("height", height);
+
+    function parseRow(row) {
+      row.start = 0.0 + row.start;
+      row.end = 0.0 + row.end;
+      return row;
+    }
+
+    d3.tsv(fileName, parseRow, function(error, data) {
+      console.log(data);
+
+      var x = d3.scale.linear()
+        .domain([0, d3.max(data, function(d) {
+          return d.end;
+        })])
+        .range([0, width]);
+
+      var bar = chart.selectAll("g")
+        .data(data)
+        .enter().append("g")
+        .attr("transform", function(d, i) {
+          return "translate(" + x(d.start) + ", 0)";
+        });
+
+      bar.append("rect")
+        .attr("width", function(d) {
+          return x(d.end - d.start) - 1;
+        })
+        .attr("height", height);
+
+      bar.append("text")
+        .attr("y", height / 2)
+        .attr("dx", 5)
+        .text(function(d) {
+          return d.label;
+        });
+    });
+  </script>
+</body>
+<html>

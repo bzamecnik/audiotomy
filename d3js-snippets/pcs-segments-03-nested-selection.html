@@ -1,0 +1,164 @@
+<html>
+
+<head>
+  <style>
+    body {
+      font-family: sans-serif;
+    }
+
+    .chart {
+      border: 1px solid #eee;
+    }
+
+    .pitchClass {
+      fill: steelblue;
+      stroke: darkblue;
+    }
+
+    .segment text {
+      font-size: 10px;
+      text-anchor: beginning;
+    }
+
+    .segment .background {
+      fill: transparent;
+    }
+
+    .segment:hover .background {
+      fill: #eee;
+    }
+
+    .segment:hover .pitchClass {
+      fill: darkred;
+    }
+
+    .axis text {
+      font-size: 10px;
+    }
+
+    .axis path,
+    .axis line {
+      fill: none;
+      stroke: #000;
+      shape-rendering: crispEdges;
+    }
+  </style>
+</head>
+
+<body>
+  <script src="d3.v3.min.js" charset="utf-8"></script>
+  <script>
+    var fileName = "02_-_The_Night_Before.lab.pcs.tsv";
+
+    d3.select("body")
+      .append("p")
+      .text(fileName);
+
+    function parseRow(row) {
+      row.start = +row.start;
+      row.end = +row.end;
+      return row;
+    }
+
+    var margin = {
+      top: 10,
+      right: 10,
+      bottom: 25,
+      left: 30
+    };
+
+    var width = 1000,
+      height = 300,
+      innerWidth = width - margin.left - margin.right,
+      innerHeight = height - margin.top - margin.bottom;
+
+    var chart = d3.select("body")
+      .append("svg")
+      .attr("class", "chart")
+      .attr("width", width)
+      .attr("height", height)
+      .append("g")
+      .attr("class", "segments")
+      .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    var x = d3.scale.linear();
+    var y = d3.scale.ordinal();
+
+    d3.tsv(fileName, parseRow, function(error, rows) {
+
+      x.range([0, innerWidth])
+        .domain([0, d3.max(rows, function(d) {
+          return d.end;
+        })]);
+
+      y.rangeBands([innerHeight, 0])
+        .domain(['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']);
+
+      var segment = chart.selectAll(".segment")
+        .data(rows)
+        .enter().append("g")
+        .attr("class", "segment")
+        .attr("transform", function(d, i) {
+          return "translate(" + x(d.start) + ", 0)";
+        });
+
+      const PC_COLS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb',
+        'G', 'Ab', 'A', 'Bb', 'B'
+      ];
+
+      function activePitchClasses(row) {
+        return PC_COLS.filter(function(col) {
+          return row[col] == 1;
+        });
+      }
+
+      segment
+        .append("rect")
+        .attr("class", "background")
+        .attr("height", innerHeight)
+        .attr("width", function(d) {
+          return x(d.end - d.start);
+        });
+
+      segment
+        .selectAll("pitchClass")
+        .data(function(row, i) {
+          return activePitchClasses(row).map(function(pc) {
+            return {
+              "start": row.start,
+              "end": row.end,
+              "pc": pc
+            };
+          });
+        })
+        .enter()
+        .append("rect")
+        .attr("class", "pitchClass")
+        .attr("width", function(d) {
+          return x(d.end - d.start);
+        })
+        .attr("height", y.rangeBand())
+        .attr("y", function(d) {
+          return y(d.pc);
+        });
+
+      var xAxis = d3.svg.axis()
+        .scale(x)
+        .orient("bottom");
+
+      chart.append("g")
+        .attr("class", "x axis")
+        .attr("transform", "translate(0," + innerHeight + ")")
+        .call(xAxis);
+
+      var yAxis = d3.svg.axis()
+        .scale(y)
+        .orient("left");
+
+      chart.append("g")
+        .attr("class", "y axis")
+        .call(yAxis);
+    });
+  </script>
+</body>
+<html>
