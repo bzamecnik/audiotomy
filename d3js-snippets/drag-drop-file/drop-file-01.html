@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Drop Files into Browser</title>
+  <style type="text/css">
+    #holder,
+    #content {
+      border: 1px solid lightgray;
+      height: 100px;
+      font-size: 20px;
+      color: gray;
+      text-align: center;
+      padding: 20px;
+    }
+  </style>
+
+</head>
+
+<body>
+
+  <h1>Drag and drop file demo with jQuery Event binding</h1>
+  <div id="holder">
+    Drop files from desktop here
+  </div>
+
+  <div id="content">
+  </div>
+
+  <h2>Source</h2>
+
+  <p>Include jQuery and shim</p>
+  <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.4/jquery.min.js" class="pre"></script>
+
+  <script class="pre">
+    $(document).ready(function() {
+      var ignoreDrag = function(e) {
+        var event = typeof e.originalEvent != 'undefined' ? e.originalEvent : e;
+        if (event.stopPropagation) {
+          event.stopPropagation();
+        }
+        if (event.preventDefault) {
+          event.preventDefault();
+        }
+      };
+
+      $("#holder")
+        .bind('dragover', ignoreDrag)
+        .bind('dragenter', ignoreDrag)
+        .bind('drop', function(e) {
+          e = (e && e.originalEvent ? e.originalEvent : window.event) || e;
+
+          ignoreDrag(e);
+
+          var files = (e.files || e.dataTransfer.files);
+
+          var reader = new FileReader();
+          reader.onload = function(event) {
+            $("#content").html("<pre><code>" + event.target.result + "</code></pre>");
+          };
+          reader.readAsText(files[0]);
+
+          return false;
+        });
+    });
+  </script>
+</body>
+
+</html>
