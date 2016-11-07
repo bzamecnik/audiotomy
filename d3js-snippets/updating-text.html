@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+</style>
+
+<body>
+
+  <!-- load the d3.js library -->
+  <script src="http://d3js.org/d3.v3.min.js"></script>
+
+  <script>
+    var alphabet = "abcdefghijklmnopqrstuvwxyz".split("");
+
+    d3.select("body").append("p").attr("id", "text");
+
+    function update(data) {
+      d3.select("#text").text(data);
+    }
+
+    update(alphabet);
+
+    var t = 0;
+
+    setInterval(function() {
+      t += 1;
+      update(alphabet
+        .slice(0, t % alphabet.length)
+        .join(" "));
+    }, 100);
+  </script>
+</body>
