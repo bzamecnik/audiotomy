@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Promise</title>
+</head>
+
+<body>
+
+  <audio id="song"></audio>
+
+  <script src="d3.v3.min.js" charset="utf-8"></script>
+  <script>
+    "use strict";
+
+    var audioFile = "../audio/17_-_Her_Majesty.m4a";
+    var labelsFile = "../audio/17_-_Her_Majesty.lab.pcs.tsv";
+
+    d3.select("#song").attr("src", audioFile);
+
+    var audioDuration = null;
+    var labelsDuration = null;
+    var totalDuration = null;
+
+    var dispatch = d3.dispatch("duration_changed", "data_ready");
+
+    dispatch.on("duration_changed", function(duration) {
+      totalDuration = d3.max([audioDuration, labelsDuration]);
+      console.log("audio: " + audioDuration + ", labels: " + labelsDuration);
+      if (audioDuration != null && labelsDuration != null) {
+        dispatch.data_ready();
+      }
+    });
+
+    dispatch.on("data_ready", function(duration) {
+      console.log("total duration: " + totalDuration);
+    });
+
+    d3.tsv(labelsFile, function(error, rows) {
+      if (!error) {
+        labelsDuration = d3.max(rows, function(d) {
+          return +d.end;
+        });
+      } else {
+        labelsDuration = null;
+      }
+      dispatch.duration_changed();
+    });
+
+    d3.select("#song").on("durationchange", function() {
+      audioDuration = this.duration;
+      dispatch.duration_changed();
+    });
+
+    d3.select("#song").on("error", function() {
+      audioDuration = null;
+      dispatch.duration_changed();
+    });
+  </script>
+</body>
+
+</html>

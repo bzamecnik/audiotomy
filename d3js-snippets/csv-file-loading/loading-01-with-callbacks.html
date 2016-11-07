@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Loading with callbacks.</title>
+</head>
+
+<body>
+
+  <audio id="song"></audio>
+
+  <script src="d3.v3.min.js" charset="utf-8"></script>
+  <script>
+    "use strict";
+
+    var audioFile = "../audio/17_-_Her_Majesty.m4a";
+    var labelsFile = "../audio/17_-_Her_Majesty.lab.pcs.tsv";
+
+    d3.select("#song").attr("src", audioFile);
+
+    d3.tsv(labelsFile, function(error, rows) {
+      console.log("TSV duration: " + d3.max(rows, function(d) {
+        return +d.end;
+      }));
+    });
+
+    d3.select("#song").on("durationchange", function() {
+      console.log("audio duration: " + this.duration);
+    });
+  </script>
+</body>
+
+</html>
