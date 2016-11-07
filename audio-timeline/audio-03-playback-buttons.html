@@ -1,0 +1,13 @@
+<audio id="song" src="17_-_Her_Majesty.wav"></audio>
+
+<script>
+var song = document.getElementById('song');
+</script>
+
+<div>
+  <button onclick="song.play()">Play</button>
+  <button onclick="song.pause()">Pause</button>
+  <button onclick="song.pause(); song.currentTime = 0;">Stop</button>
+  <button onclick="song.volume += 0.1">Increase Volume</button>
+  <button onclick="song.volume -= 0.1">Decrease Volume</button>
+</div>

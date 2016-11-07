@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Audio player</title>
+  <style type="text/css">
+    #chart {
+      background: #fafafa;
+      border: 1px solid #eee;
+    }
+
+    #progressbar {
+      fill: steelblue;
+    }
+  </style>
+
+</head>
+
+<body>
+
+  <p>
+    Very simple audio player with seek via click into the progress bar.
+  </p>
+
+  <audio id="song" src="17_-_Her_Majesty.wav"></audio>
+
+  <svg id="chart"></svg>
+
+  <div>
+    <button id="play">Play [<kbd>SPACE</kbd>]</button>
+    <button id="pause">Pause [<kbd>SPACE</kbd>]</button>
+    <button id="stop">Stop [<kbd>ESC</kbd>]</button>
+    <button id="backward">Backward [<kbd>&larr;</kbd>]</button>
+    <button id="forward">Forward [<kbd>&larr;</kbd>]</button>
+    <button id="increaseVolume">Increase Volume [<kbd>&uarr;</kbd>]</button>
+    <button id="decreaseVolume">Decrease Volume [<kbd>&darr;</kbd>]</button>
+  </div>
+
+  <ul>
+    <li>Source:
+      <span id="source"></span>
+    </li>
+    <li>Duration:
+      <span id="duration"></span> s</li>
+    <li>Current time:
+      <span id="currentTime"></span> s (
+      <span id="currentTimePercentage"></span> %)</li>
+    <li>Volume:
+      <span id="volume"></span>
+    </li>
+  </ul>
+
+  <script src="jquery.min.js"></script>
+  <script src="d3.v3.min.js" charset="utf-8"></script>
+  <script>
+    $(document).ready(function() {
+
+      var width = 400,
+        height = 20;
+
+      var x = d3.scale.linear()
+        .domain([0, 100])
+        .range([0, width]);
+
+      var chart = d3.select("#chart")
+        .attr("width", width)
+        .attr("height", height);
+
+      chart.append("rect")
+        .attr("id", "progressbar")
+        .attr("width", 0)
+        .attr("height", height);
+
+      $("#progressbar").attr("width", 50);
+
+      var song = document.getElementById('song');
+
+      var percentFormat = d3.format("0.2f");
+
+      song.onloadeddata = function() {
+        $("#source").text(song.currentSrc);
+      };
+      song.ondurationchange = function() {
+        $("#duration").text(percentFormat(song.duration));
+      };
+      song.onended = function() {
+        clearInterval(intervalId);
+      };
+
+      function percentageToTime(percentage) {
+        return percentage * 0.01 * song.duration;
+      }
+
+      function timeToPercentage(time) {
+        return 100.0 * time / song.duration;
+      }
+
+      function updateProgress() {
+        $("#currentTime").text(percentFormat(song.currentTime));
+        var timePerc = timeToPercentage(song.currentTime);
+        $("#currentTimePercentage").text(percentFormat(timePerc));
+        d3.select("#progressbar").attr("width", x(timePerc));
+      };
+      song.onvolumechange = function() {
+        $("#volume").text(percentFormat(song.volume));
+      };
+      song.onvolumechange();
+
+      var intervalId;
+
+      function play() {
+        song.play();
+        intervalId = setInterval(updateProgress, 25);
+      }
+
+      function pause() {
+        song.pause();
+        clearInterval(intervalId);
+        updateProgress();
+      }
+
+      function togglePlayback() {
+        if (song.paused) {
+          play();
+        } else {
+          pause();
+        }
+      }
+
+      function stop() {
+        pause();
+        song.currentTime = 0;
+        updateProgress();
+      }
+
+      function seekTo(time) {
+        song.currentTime = time;
+        updateProgress();
+      }
+
+      function seekBy(offset) {
+        song.currentTime += offset;
+        updateProgress();
+      }
+
+      var seekOffset = 0.5;
+
+      function backward() {
+        seekBy(-seekOffset);
+      }
+
+      function forward() {
+        seekBy(seekOffset);
+      }
+
+      var volumeOffset = 0.1;
+
+      function increaseVolume(diff) {
+        song.volume += diff;
+      }
+
+      function volumeUp() {
+        increaseVolume(volumeOffset);
+      }
+
+      function volumeDown() {
+        increaseVolume(-volumeOffset);
+      }
+
+      $("#play").click(play);
+      $("#pause").click(pause);
+      $("#stop").click(stop);
+      $("#backward").click(backward);
+      $("#forward").click(forward);
+      $("#increaseVolume").click(volumeUp);
+      $("#decreaseVolume").click(volumeDown);
+
+      var keyMapping = {
+        27: stop, // ESC
+        32: togglePlayback, // SPACE
+        37: backward, // LEFT ARROW
+        38: volumeUp, // UP ARROW
+        39: forward, // RIGHT ARROW
+        40: volumeDown // DOWN ARROW
+      }
+
+      $("body").keydown(function(event) {
+        var command = keyMapping[event.which];
+        if (command) {
+          command();
+        }
+      });
+
+      $("#chart").click(function(event) {
+        var timePerc = x.invert(event.offsetX);
+        var time = percentageToTime(timePerc);
+        seekTo(time);
+      });
+    });
+  </script>
+</body>
+
+</html>

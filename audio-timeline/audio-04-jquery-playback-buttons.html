@@ -1,0 +1,28 @@
+<audio id="song" src="17_-_Her_Majesty.wav"></audio>
+
+<script src="jquery.min.js"></script>
+<script>
+  $(document).ready(function() {
+    var song = document.getElementById('song');
+    function stop() {
+      song.pause();
+      song.currentTime = 0;
+    }
+    function increaseVolume(diff) {
+      song.volume += diff;
+    }
+    $("#play").click(function() { song.play(); });
+    $("#pause").click(function() { song.pause(); });
+    $("#stop").click(stop);
+    $("#increaseVolume").click(function() { increaseVolume(0.1); });
+    $("#decreaseVolume").click(function() { increaseVolume(-0.1); });
+  });
+</script>
+
+<div>
+  <button id="play">Play</button>
+  <button id="pause">Pause</button>
+  <button id="stop">Stop</button>
+  <button id="increaseVolume">Increase Volume</button>
+  <button id="decreaseVolume">Decrease Volume</button>
+</div>

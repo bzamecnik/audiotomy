@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Audio player</title>
+  <style type="text/css">
+    #chart {
+      background: #fafafa;
+      border: 1px solid #eee;
+    }
+
+    #progressbar {
+      fill: steelblue;
+    }
+  </style>
+
+</head>
+
+<body>
+
+  <p>
+    Very simple audio player with status of playback displayed.
+    The playback is updated only with <code>ontimeupdate</code>.
+  </p>
+
+  <audio id="song" src="17_-_Her_Majesty.wav"></audio>
+
+  <svg id="chart"></svg>
+
+  <div>
+    <button id="play">Play</button>
+    <button id="pause">Pause</button>
+    <button id="stop">Stop</button>
+    <button id="increaseVolume">Increase Volume</button>
+    <button id="decreaseVolume">Decrease Volume</button>
+  </div>
+
+  <ul>
+    <li>Source:
+      <span id="source"></span>
+    </li>
+    <li>Duration:
+      <span id="duration"></span> s</li>
+    <li>Current time:
+      <span id="currentTime"></span> s (
+      <span id="currentTimePercentage"></span> %)</li>
+    <li>Volume:
+      <span id="volume"></span>
+    </li>
+  </ul>
+
+  <script src="jquery.min.js"></script>
+  <script src="d3.v3.min.js" charset="utf-8"></script>
+  <script>
+    $(document).ready(function() {
+
+      var width = 400,
+        height = 20;
+
+      var x = d3.scale.linear()
+        .domain([0, 100])
+        .range([0, width]);
+
+      var chart = d3.select("#chart")
+        .attr("width", width)
+        .attr("height", height);
+
+      chart.append("rect")
+        .attr("id", "progressbar")
+        .attr("width", 0)
+        .attr("height", height);
+
+      $("#progressbar").attr("width", 50);
+
+      var song = document.getElementById('song');
+
+      song.onloadeddata = function() {
+        $("#source").text(song.currentSrc);
+      };
+      song.ondurationchange = function() {
+        $("#duration").text(song.duration);
+      };
+      song.ontimeupdate = function() {
+        $("#currentTime").text(song.currentTime);
+        var timePerc = 100.0 * song.currentTime / song.duration;
+        $("#currentTimePercentage").text(timePerc);
+        console.log("width: " + x(timePerc));
+        d3.select("#progressbar").attr("width", x(timePerc));
+      };
+      song.onvolumechange = function() {
+        $("#volume").text(song.volume);
+      };
+      song.onvolumechange();
+
+      function stop() {
+        song.pause();
+        song.currentTime = 0;
+      }
+
+      function increaseVolume(diff) {
+        song.volume += diff;
+      }
+      $("#play").click(function() {
+        song.play();
+      });
+      $("#pause").click(function() {
+        song.pause();
+      });
+      $("#stop").click(stop);
+      $("#increaseVolume").click(function() {
+        increaseVolume(0.1);
+      });
+      $("#decreaseVolume").click(function() {
+        increaseVolume(-0.1);
+      });
+    });
+  </script>
+</body>
+
+</html>

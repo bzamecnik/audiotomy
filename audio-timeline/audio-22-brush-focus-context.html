@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Audio player</title>
+  <style type="text/css">
+    body {
+      font-family: sans-serif;
+    }
+
+    .chart {
+      border: 1px solid #eee;
+    }
+
+    #chart .focus .segments {
+      clip-path: url(#clip);
+    }
+
+    #chart .cursor .needle {
+      stroke: hsla(0, 0%, 0%, 0.3);
+    }
+
+    #chart .cursor .drag-area {
+      stroke: hsla(0, 50%, 95%, 0.01);
+      stroke-width: 20;
+      cursor: ew-resize;
+    }
+
+    #chart .cursor polygon {
+      fill: hsla(0, 0%, 0%, 0.3);
+    }
+
+    .pitchClass {
+      fill: hsl(200, 60%, 60%);
+      stroke: hsl(200, 60%, 30%);
+    }
+
+    .segment text {
+      font-size: 10px;
+      text-anchor: beginning;
+    }
+
+    .segment .background {
+      fill: transparent;
+    }
+
+    .segment .background:hover {
+      fill: hsl(200, 60%, 95%);
+    }
+
+    .segment.current .background {
+      fill: hsl(0, 60%, 95%);
+    }
+
+    .segment.current .pitchClass {
+      fill: hsl(0, 60%, 60%);
+      stroke: hsl(0, 60%, 30%);
+    }
+
+    .axis text {
+      font-size: 10px;
+    }
+
+    .axis path,
+    .axis line {
+      fill: none;
+      stroke: #000;
+      shape-rendering: crispEdges;
+    }
+
+    .brush .extent {
+      stroke: #fff;
+      fill-opacity: .125;
+      shape-rendering: crispEdges;
+    }
+
+    #labels {
+      font-family: monospace;
+      cursor: pointer;
+    }
+
+    #labels .current {
+      font-weight: bold;
+      color: hsl(0, 60%, 60%);
+      background: hsl(0, 60%, 95%);
+    }
+  </style>
+
+</head>
+
+<body>
+
+  <p>
+    Audio player with synchronous timeline of pitch class segments.
+  </p>
+
+  <audio id="song"></audio>
+
+  <div>
+    <button id="play">Play [
+      <kbd>SPACE</kbd>]</button>
+    <button id="pause">Pause [
+      <kbd>SPACE</kbd>]</button>
+    <button id="stop">Stop [
+      <kbd>ESC</kbd>]</button>
+    <button id="backward">Backward [
+      <kbd>&larr;</kbd>]</button>
+    <button id="forward">Forward [
+      <kbd>&larr;</kbd>]</button>
+    <button id="increaseVolume">Increase Volume [
+      <kbd>&uarr;</kbd>]</button>
+    <button id="decreaseVolume">Decrease Volume [
+      <kbd>&darr;</kbd>]</button>
+  </div>
+
+  <ul>
+    <li>Labels file:
+      <span id="labelsFile"></span>
+    </li>
+    <li>Audio file:
+      <span id="audioFile"></span>
+    </li>
+    <li>Total duration:
+      <span id="duration"></span> s</li>
+    <li>Current time:
+      <span id="currentTime">0</span> s (
+      <span id="currentTimePercentage">0</span> %)</li>
+    <li>Volume:
+      <span id="volume"></span>
+    </li>
+  </ul>
+
+  <svg id="chart"></svg>
+
+  <p>Labels:</p>
+
+  <table id="labels"></table>
+
+  <script src="jquery.min.js"></script>
+  <script src="d3.v3.min.js" charset="utf-8"></script>
+  <script>
+    "use strict";
+
+    $(document).ready(function() {
+
+      // var audioFile = "17_-_Her_Majesty.m4a";
+      // var labelsFile = "17_-_Her_Majesty.lab.pcs.tsv";
+      var audioFile = "../data-beatles/audio-cd/The_Beatles/05_-_Help!/02_-_The_Night_Before.wav";
+      var labelsFile = "../data-beatles/chordlab/The_Beatles/05_-_Help!/02_-_The_Night_Before.lab.pcs.tsv"
+
+      d3.select("#song").attr("src", audioFile);
+
+      var audioDuration = null;
+      var labelsDuration = null;
+      var totalDuration = null;
+      var labelRows = null;
+
+      var dispatch = d3.dispatch("duration_changed", "data_ready");
+
+      dispatch.on("duration_changed", function(duration) {
+        totalDuration = d3.max([audioDuration, labelsDuration]);
+        if (audioDuration != null && labelsDuration != null) {
+          dispatch.data_ready();
+        }
+      });
+
+      dispatch.on("data_ready", function(duration) {
+        makeVisualization();
+      });
+
+      function parseRow(row) {
+        row.start = +row.start;
+        row.end = +row.end;
+        return row;
+      }
+
+      d3.tsv(labelsFile, parseRow, function(error, rows) {
+        if (!error) {
+          labelRows = rows;
+          labelsDuration = d3.max(rows, function(d) {
+            return d.end;
+          });
+        } else {
+          labelRows = null;
+          labelsDuration = null;
+        }
+        dispatch.duration_changed();
+      });
+
+      d3.select("#song").on("durationchange", function() {
+        audioDuration = this.duration;
+        dispatch.duration_changed();
+      });
+
+      function makeVisualization() {
+
+        var percentFormat = d3.format("0.2f");
+
+        var song = $("#song")[0];
+
+        $("#duration").text(percentFormat(totalDuration));
+
+        $("#song")
+          .bind("loadeddata", function() {
+            d3.select("#audioFile")
+              .datum(this.currentSrc)
+              .text(function(d) {
+                return d;
+              });
+          })
+          .bind("ended", function() {
+            animation.stop();
+          })
+          .bind("volumechange", function() {
+            $("#volume").text(percentFormat(this.volume));
+          })
+          .trigger("volumechange");
+
+        $("#labelsFile").text(labelsFile);
+
+        function chordTimelineChart() {
+
+          var margin = {
+            top: 10,
+            right: 10,
+            bottom: 20,
+            left: 30
+          };
+
+          var margin2 = {
+            top: 10,
+            right: 10,
+            bottom: 25,
+            left: 30
+          };
+
+          var width = 1000,
+            height = 300,
+            innerWidth = width - margin.left - margin.right //,
+          innerHeight = height - margin.top - margin.bottom;
+
+          var height2 = 75,
+            innerHeight2 = height2 - margin2.top - margin2.bottom;
+
+          const PC_COLS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb',
+            'G', 'Ab', 'A', 'Bb', 'B'
+          ];
+
+          // const key = 2;
+          // const PC_COLS_FIFTHS =
+          //   Array.apply(null, Array(12))
+          //   .map(function(_, i) {
+          //     return i;
+          //   })
+          //   .map(function(pc) {
+          //     return ((pc - key + 12) * 7) % 12;
+          //   })
+          //   .map(function(i) {
+          //     return PC_COLS[i];
+          //   });
+
+          function activePitchClasses(row) {
+            return PC_COLS.filter(function(col) {
+              return row[col] == 1;
+            });
+          }
+
+          var x = d3.scale.linear()
+            .domain([0, totalDuration]);
+          var y = d3.scale.ordinal()
+            .domain(PC_COLS);
+          var x2 = d3.scale.linear()
+            .domain(x.domain());
+          var y2 = d3.scale.ordinal()
+            .domain(y.domain());
+
+          var xAxis = d3.svg.axis()
+            .scale(x)
+            .orient("bottom");
+
+          var yAxis = d3.svg.axis()
+            .scale(y)
+            .orient("left");
+
+          var xAxis2 = d3.svg.axis()
+            .scale(x2)
+            .orient("bottom");
+
+          function chart(selection) {
+            selection.each(function(data) {
+              // data: TSV rows
+              var chart = selection
+                .attr("class", "chart")
+                .attr("width", width)
+                .attr("height", height + height2);
+
+              chart.append("defs").append("clipPath")
+                .attr("id", "clip")
+                .append("rect")
+                .attr("width", innerWidth)
+                .attr("height", innerHeight + margin.top);
+
+              function segmentChart(pane, x, y, xAxis, yAxis, innerWidth, innerHeight) {
+                x.range([0, innerWidth]);
+                y.rangeBands([innerHeight, 0]);
+
+                var segments = pane.append("g")
+                  .attr("class", "segments");
+
+                var segment = segments.selectAll(".segment")
+                  .data(data)
+                  .enter()
+                  .append("g")
+                  .attr("class", "segment")
+                  .attr("transform", function(d, i) {
+                    return "translate(" + x(d.start) + ", 0)";
+                  })
+                  .on("click", function(d) {
+                    controls.seekTo(d.start);
+                  });
+
+                segment
+                  .append("rect")
+                  .attr("class", "background")
+                  .attr("height", innerHeight)
+                  .attr("width", function(d) {
+                    return x(d.end) - x(d.start);
+                  })
+                  .append("svg:title")
+                  .text(function(d) {
+                    return d.label;
+                  });
+
+                segment
+                  .selectAll("pitchClass")
+                  .data(function(row, i) {
+                    return activePitchClasses(row).map(function(pc) {
+                      return {
+                        "start": row.start,
+                        "end": row.end,
+                        "pc": pc
+                      };
+                    });
+                  })
+                  .enter()
+                  .append("rect")
+                  .attr("class", "pitchClass")
+                  .attr("width", function(d) {
+                    return x(d.end) - x(d.start);
+                  })
+                  .attr("height", y.rangeBand())
+                  .attr("y", function(d) {
+                    return y(d.pc);
+                  })
+                  .append("svg:title")
+                  .text(function(d) {
+                    return d.pc;
+                  });
+
+                pane.append("g")
+                  .attr("class", "x axis")
+                  .attr("transform", "translate(0," + innerHeight + ")")
+                  .call(xAxis);
+
+                if (yAxis) {
+                  pane.append("g")
+                    .attr("class", "y axis")
+                    .call(yAxis);
+                }
+
+                var drag = d3.behavior.drag()
+                  .on("drag", function(d, i) {
+                    var time = x.invert(d3.event.x);
+                    controls.seekTo(time);
+                  });
+
+                var cursor = pane.append("g")
+                  .attr("class", "cursor")
+                  .call(drag);
+
+                cursor.append("line")
+                  .attr("class", "needle")
+                  .attr("y2", innerHeight);
+                cursor.append("line")
+                  .attr("class", "drag-area")
+                  .attr("y2", innerHeight);
+                cursor.append("polygon")
+                  .attr("points", "-5,-5 0,0 5,-5");
+                cursor.append("polygon")
+                  .attr("points", "-5,5 0,0 5,5")
+                  .attr("transform", "translate(0, " + innerHeight + ")");
+              }
+
+              var focus = chart.append("g")
+                .attr("class", "focus")
+                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+              var context = chart.append("g")
+                .attr("class", "context")
+                .attr("transform", "translate(" + margin2.left + "," + (height + margin2.top) + ")");
+
+              segmentChart(focus, x, y, xAxis, yAxis, innerWidth, innerHeight);
+
+              segmentChart(context, x2, y2, xAxis2, null, innerWidth, innerHeight2);
+
+              var brush = d3.svg.brush()
+                .x(x2)
+                .on("brush", brushed);
+
+              function brushed() {
+                x.domain(brush.empty() ? x2.domain() : brush.extent());
+                d3.select(".focus").remove();
+
+                var focus = chart.append("g")
+                  .attr("class", "focus")
+                  .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+                segmentChart(focus, x, y, xAxis, yAxis, innerWidth, innerHeight, margin);
+                focus.select(".x.axis").call(xAxis);
+              }
+
+              context.append("g")
+                .attr("class", "x brush")
+                .call(brush)
+                .selectAll("rect")
+                .attr("y", -5)
+                .attr("height", height2 - 25);
+            });
+          }
+          chart.x = x;
+          chart.x2 = x2;
+
+          return chart;
+        }
+
+        function segmentTableChart() {
+          function chart(selection) {
+            selection.each(function(data) {
+              selection.append('thead').append('tr')
+                .selectAll('th')
+                .data(["start", "end", "label"]).enter()
+                .append('th')
+                .text(function(d) {
+                  return d;
+                });
+              var tr = selection.append("tbody").selectAll("tr")
+                .data(data)
+                .enter()
+                .append("tr")
+                .attr("data-start", function(row) {
+                  return row.start;
+                })
+                .attr("data-end", function(row) {
+                  return row.end;
+                })
+                .on("click", function(row) {
+                  controls.seekTo(row.start);
+                });
+
+              tr.append("td")
+                .html(function(row) {
+                  return row.start;
+                });
+              tr.append("td")
+                .html(function(row) {
+                  return row.end;
+                });
+              tr.append("td")
+                .html(function(row) {
+                  return row.label;
+                });
+            });
+          }
+
+          function findCurrentRow(rows, time) {
+            function isCurrentRow(row) {
+              return row.start <= time && time < row.end;
+            }
+            return rows.findIndex(isCurrentRow);
+          }
+
+          chart.selectCurrentRow = function(time) {
+            var rows = d3.select("#chart").data()[0];
+            var currentRowIndex = findCurrentRow(rows, time);
+            d3.select("#labels tbody").selectAll("tr")
+              .classed("current", function(row, i) {
+                return i == currentRowIndex;
+              });
+
+            d3.select(".chart .focus").selectAll(".segment")
+              .classed("current", function(row, i) {
+                return i == currentRowIndex;
+              });
+            d3.select(".chart .context").selectAll(".segment")
+              .classed("current", function(row, i) {
+                return i == currentRowIndex;
+              });
+          };
+
+          return chart;
+        }
+
+        var chordTimeline = chordTimelineChart();
+        var segmentTable = segmentTableChart();
+
+        d3.select("#chart")
+          .datum(labelRows)
+          .call(chordTimeline);
+
+        d3.select("#labels")
+          .datum(labelRows)
+          .call(segmentTable);
+
+        function updateProgress() {
+          var time = song.currentTime;
+          $("#currentTime").text(percentFormat(time));
+
+          function timeToPercentage(time) {
+            return 100.0 * time / song.duration;
+          }
+
+          var timePerc = timeToPercentage(time);
+          $("#currentTimePercentage").text(percentFormat(timePerc));
+
+          d3.select("#chart .focus .cursor").attr("transform", "translate(" + chordTimeline.x(time) + ",0)");
+          d3.select("#chart .context .cursor").attr("transform", "translate(" + chordTimeline.x2(time) + ",0)");
+
+          segmentTable.selectCurrentRow(time);
+        };
+
+        var animation = (function(handleFrame) {
+          var requestId;
+
+          function run() {
+            handleFrame();
+            scheduleNextFrame();
+          }
+
+          function scheduleNextFrame() {
+            requestId = requestAnimationFrame(run);
+          }
+
+          return {
+            "start": scheduleNextFrame,
+            "stop": function() {
+              cancelAnimationFrame(requestId);
+            }
+          };
+        })(updateProgress);
+
+        var controls = (function() {
+          function play() {
+            song.play();
+            animation.start();
+          }
+
+          function pause() {
+            song.pause();
+            animation.stop();
+          }
+
+          function togglePlayback() {
+            if (song.paused) {
+              play();
+            } else {
+              pause();
+            }
+          }
+
+          function stop() {
+            pause();
+            song.currentTime = 0;
+            updateProgress();
+          }
+
+          function seekTo(time) {
+            song.currentTime = time;
+            updateProgress();
+          }
+
+          function seekBy(offset) {
+            song.currentTime += offset;
+            updateProgress();
+          }
+
+          const seekOffset = 0.5;
+
+          function backward() {
+            seekBy(-seekOffset);
+          }
+
+          function forward() {
+            seekBy(seekOffset);
+          }
+
+          const volumeOffset = 0.1;
+
+          function increaseVolume(diff) {
+            song.volume = Math.min(1, Math.max(0, song.volume + diff));
+          }
+
+          function volumeUp() {
+            increaseVolume(volumeOffset);
+          }
+
+          function volumeDown() {
+            increaseVolume(-volumeOffset);
+          }
+
+          $("#play").click(play);
+          $("#pause").click(pause);
+          $("#stop").click(stop);
+          $("#backward").click(backward);
+          $("#forward").click(forward);
+          $("#increaseVolume").click(volumeUp);
+          $("#decreaseVolume").click(volumeDown);
+
+          var keyMapping = {
+            27: stop, // ESC
+            32: togglePlayback, // SPACE
+            37: backward, // LEFT ARROW
+            38: volumeUp, // UP ARROW
+            39: forward, // RIGHT ARROW
+            40: volumeDown // DOWN ARROW
+          }
+
+          $("body").keydown(function(event) {
+            var command = keyMapping[event.which];
+            if (command) {
+              command();
+              event.preventDefault();
+            }
+          });
+
+          return {
+            "play": play,
+            "pause": pause,
+            "stop": stop,
+            "seekTo": seekTo,
+            "backward": backward,
+            "forward": forward,
+            "volumeUp": volumeUp,
+            "volumeDown": volumeDown
+          };
+        })();
+      }
+    });
+  </script>
+</body>
+
+</html>

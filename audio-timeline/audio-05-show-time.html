@@ -1,0 +1,71 @@
+<p>
+  Very simple audio player with status of playback displayed.
+</p>
+
+<audio id="song" src="17_-_Her_Majesty.wav"></audio>
+
+<script src="jquery.min.js"></script>
+<script>
+  $(document).ready(function() {
+    var song = document.getElementById('song');
+
+    song.onloadeddata = function() {
+      $("#source").text(song.currentSrc);
+    };
+    song.ondurationchange = function() {
+      $("#duration").text(song.duration);
+    };
+    song.ontimeupdate = function() {
+      $("#currentTime").text(song.currentTime);
+      $("#currentTimePercentage").text(100 * song.currentTime / song.duration);
+    };
+    song.onvolumechange = function() {
+      $("#volume").text(song.volume);
+    };
+    song.onvolumechange();
+
+    function stop() {
+      song.pause();
+      song.currentTime = 0;
+    }
+
+    function increaseVolume(diff) {
+      song.volume += diff;
+    }
+    $("#play").click(function() {
+      song.play();
+    });
+    $("#pause").click(function() {
+      song.pause();
+    });
+    $("#stop").click(stop);
+    $("#increaseVolume").click(function() {
+      increaseVolume(0.1);
+    });
+    $("#decreaseVolume").click(function() {
+      increaseVolume(-0.1);
+    });
+  });
+</script>
+
+<div>
+  <button id="play">Play</button>
+  <button id="pause">Pause</button>
+  <button id="stop">Stop</button>
+  <button id="increaseVolume">Increase Volume</button>
+  <button id="decreaseVolume">Decrease Volume</button>
+</div>
+
+<ul>
+  <li>Source:
+    <span id="source"></span>
+  </li>
+  <li>Duration:
+    <span id="duration"></span> s</li>
+  <li>Current time:
+    <span id="currentTime"></span> s (
+    <span id="currentTimePercentage"></span> %)</li>
+  <li>Volume:
+    <span id="volume"></span>
+  </li>
+</ul>

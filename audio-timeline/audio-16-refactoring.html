@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Audio player</title>
+  <style type="text/css">
+    body {
+      font-family: sans-serif;
+    }
+
+    .chart {
+      border: 1px solid #eee;
+    }
+
+    .pitchClass {
+      fill: hsl(200, 60%, 60%);
+      stroke: hsl(200, 60%, 30%);
+    }
+
+    .segment text {
+      font-size: 10px;
+      text-anchor: beginning;
+    }
+
+    .segment .background {
+      fill: transparent;
+    }
+
+    .segment .background:hover {
+      fill: hsl(200, 60%, 95%);
+    }
+
+    .segment.current .background {
+      fill: hsl(0, 60%, 95%);
+    }
+
+    .segment.current .pitchClass {
+      fill: hsl(0, 60%, 60%);
+      stroke: hsl(0, 60%, 30%);
+    }
+
+    .axis text {
+      font-size: 10px;
+    }
+
+    .axis path,
+    .axis line {
+      fill: none;
+      stroke: #000;
+      shape-rendering: crispEdges;
+    }
+
+    #progressChart {
+      background: #fafafa;
+      border: 1px solid #eee;
+    }
+
+    #progressChart rect {
+      fill: hsl(200, 60%, 60%);
+    }
+
+    #labels {
+      font-family: monospace;
+      cursor: pointer;
+    }
+
+    #labels .current {
+      font-weight: bold;
+      color: hsl(0, 60%, 60%);
+      background: hsl(0, 60%, 95%);
+    }
+  </style>
+
+</head>
+
+<body>
+
+  <p>
+    Audio player with synchronous timeline of pitch class segments.
+  </p>
+
+  <audio id="song"></audio>
+
+  <svg id="progressChart">
+    <rect></rect>
+  </svg>
+
+  <div>
+    <button id="play">Play [
+      <kbd>SPACE</kbd>]</button>
+    <button id="pause">Pause [
+      <kbd>SPACE</kbd>]</button>
+    <button id="stop">Stop [
+      <kbd>ESC</kbd>]</button>
+    <button id="backward">Backward [
+      <kbd>&larr;</kbd>]</button>
+    <button id="forward">Forward [
+      <kbd>&larr;</kbd>]</button>
+    <button id="increaseVolume">Increase Volume [
+      <kbd>&uarr;</kbd>]</button>
+    <button id="decreaseVolume">Decrease Volume [
+      <kbd>&darr;</kbd>]</button>
+  </div>
+
+  <ul>
+    <li>Labels file:
+      <span id="labelsFile"></span>
+    </li>
+    <li>Audio file:
+      <span id="audioFile"></span>
+    </li>
+    <li>Duration:
+      <span id="duration"></span> s</li>
+    <li>Current time:
+      <span id="currentTime">0</span> s (
+      <span id="currentTimePercentage">0</span> %)</li>
+    <li>Volume:
+      <span id="volume"></span>
+    </li>
+  </ul>
+
+  <svg id="chart"></svg>
+
+  <p>Labels:</p>
+
+  <table id="labels"></table>
+
+  <script src="jquery.min.js"></script>
+  <script src="d3.v3.min.js" charset="utf-8"></script>
+  <script>
+    "use strict";
+
+    $(document).ready(function() {
+
+      // var commonPath = "The_Beatles/03_-_A_Hard_Day's_Night/05_-_And_I_Love_Her";
+      //
+      // var audioFile = "../data-beatles/audio-cd/" + commonPath + ".wav";
+      // var labelsFile = "../data-beatles/chordlab/" + commonPath + ".lab.pcs.tsv";
+
+      var audioFile = "17_-_Her_Majesty.m4a";
+      var labelsFile = "17_-_Her_Majesty.lab.pcs.tsv";
+
+      d3.select("#song").attr("src", audioFile);
+
+      $("#labelsFile").text(labelsFile);
+
+      function progressBarChart() {
+        var width = 400,
+          height = 20;
+
+        var x = d3.scale.linear()
+          .range([0, width]);
+
+        function chart(selection) {
+          selection.each(function(song) {
+            // data: <audio> DOM element
+            selection
+              .attr("width", width)
+              .attr("height", height)
+              .on("click", function() {
+                var time = x.invert(d3.event.offsetX);
+                controls.seekTo(time);
+              });
+            selection.select("rect")
+              .datum(song.currentTime)
+              .attr("width", function(d) {
+                return x(d);
+              })
+              .attr("height", height);
+          });
+        }
+        chart.duration = function(value) {
+          x.domain([0, value]);
+        };
+
+        return chart;
+      }
+
+      function chordTimelineChart() {
+
+        var margin = {
+          top: 10,
+          right: 10,
+          bottom: 25,
+          left: 30
+        };
+
+        var width = 1000,
+          height = 300,
+          innerWidth = width - margin.left - margin.right,
+          innerHeight = height - margin.top - margin.bottom;
+
+        var x = d3.scale.linear();
+        var y = d3.scale.ordinal();
+
+        var xAxis = d3.svg.axis()
+          .scale(x)
+          .orient("bottom");
+
+        var yAxis = d3.svg.axis()
+          .scale(y)
+          .orient("left");
+
+        const PC_COLS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb',
+          'G', 'Ab', 'A', 'Bb', 'B'
+        ];
+
+        function activePitchClasses(row) {
+          return PC_COLS.filter(function(col) {
+            return row[col] == 1;
+          });
+        }
+
+        function chart(selection) {
+          selection.each(function(data) {
+            // data: TSV rows
+            var chart = selection
+              .attr("class", "chart")
+              .attr("width", width)
+              .attr("height", height)
+              .append("g")
+              .attr("class", "segments")
+              .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+            x.range([0, innerWidth])
+              .domain([0, d3.max(data, function(d) {
+                return d.end;
+              })]);
+
+            y.rangeBands([innerHeight, 0])
+              .domain(PC_COLS);
+
+            var segment = chart.selectAll(".segment")
+              .data(data)
+              .enter().append("g")
+              .attr("class", "segment")
+              .attr("transform", function(d, i) {
+                return "translate(" + x(d.start) + ", 0)";
+              });
+
+            segment
+              .append("rect")
+              .attr("class", "background")
+              .attr("height", innerHeight)
+              .attr("width", function(d) {
+                return x(d.end - d.start);
+              })
+              .on("click", function(d) {
+                controls.seekTo(d.start);
+              })
+              .append("svg:title")
+              .text(function(d) {
+                return d.label;
+              });;
+
+            segment
+              .selectAll("pitchClass")
+              .data(function(row, i) {
+                return activePitchClasses(row).map(function(pc) {
+                  return {
+                    "start": row.start,
+                    "end": row.end,
+                    "pc": pc
+                  };
+                });
+              })
+              .enter()
+              .append("rect")
+              .attr("class", "pitchClass")
+              .attr("width", function(d) {
+                return x(d.end - d.start);
+              })
+              .attr("height", y.rangeBand())
+              .attr("y", function(d) {
+                return y(d.pc);
+              })
+              .append("svg:title")
+              .text(function(d) {
+                return d.pc;
+              });
+
+            chart.append("g")
+              .attr("class", "x axis")
+              .attr("transform", "translate(0," + innerHeight + ")")
+              .call(xAxis);
+
+            chart.append("g")
+              .attr("class", "y axis")
+              .call(yAxis);
+          })
+        }
+
+        return chart;
+      }
+
+      function segmentTableChart() {
+        function chart(selection) {
+          selection.each(function(data) {
+            selection.append('thead').append('tr')
+              .selectAll('th')
+              .data(["start", "end", "label"]).enter()
+              .append('th')
+              .text(function(d) {
+                return d;
+              });
+            var tr = selection.append("tbody").selectAll("tr")
+              .data(data)
+              .enter()
+              .append("tr")
+              .attr("data-start", function(row) {
+                return row.start;
+              })
+              .attr("data-end", function(row) {
+                return row.end;
+              })
+              .on("click", function(row) {
+                controls.seekTo(row.start);
+              });
+
+            tr.append("td")
+              .html(function(row) {
+                return row.start;
+              });
+            tr.append("td")
+              .html(function(row) {
+                return row.end;
+              });
+            tr.append("td")
+              .html(function(row) {
+                return row.label;
+              });
+          });
+        }
+
+        function findCurrentRow(rows, time) {
+          function isCurrentRow(row) {
+            return row.start <= time && time < row.end;
+          }
+          return rows.findIndex(isCurrentRow);
+        }
+
+        chart.selectCurrentRow = function(time) {
+          var rows = d3.select("#chart").data()[0];
+          var currentRowIndex = findCurrentRow(rows, time);
+          d3.select("#labels tbody").selectAll("tr")
+            .classed("current", function(row, i) {
+              return i == currentRowIndex;
+            });
+
+          d3.select(".chart .segments").selectAll(".segment")
+            .classed("current", function(row, i) {
+              return i == currentRowIndex;
+            });
+        };
+
+        return chart;
+      }
+
+      function parseRow(row) {
+        row.start = +row.start;
+        row.end = +row.end;
+        return row;
+      }
+
+      var progressBar = progressBarChart()
+      d3.select("#progressChart").datum(0).call(progressBar);
+      var chordTimeline = chordTimelineChart();
+      var segmentTable = segmentTableChart();
+
+      d3.tsv(labelsFile, parseRow, function(error, rows) {
+        d3.select("#chart")
+          .datum(rows)
+          .call(chordTimeline);
+
+        d3.select("#labels")
+          .datum(rows)
+          .call(segmentTable);
+      });
+
+      var percentFormat = d3.format("0.2f");
+
+      var song = $("#song")[0];
+
+      $("#song")
+        .bind("loadeddata", function() {
+          d3.select("#audioFile")
+            .datum(this.currentSrc)
+            .text(function(d) {
+              return d;
+            });
+        })
+        .bind("durationchange", function() {
+          progressBar.duration(this.duration);
+          $("#duration").text(percentFormat(this.duration));
+        })
+        .bind("ended", function() {
+          animation.stop();
+        })
+        .bind("volumechange", function() {
+          $("#volume").text(percentFormat(this.volume));
+        })
+        .trigger("volumechange");
+
+      function updateProgress() {
+        var time = song.currentTime;
+        $("#currentTime").text(percentFormat(time));
+
+        function timeToPercentage(time) {
+          return 100.0 * time / song.duration;
+        }
+
+        var timePerc = timeToPercentage(time);
+        $("#currentTimePercentage").text(percentFormat(timePerc));
+
+        d3.select("#progressChart").datum(song).call(progressBar);
+
+        segmentTable.selectCurrentRow(time);
+      };
+
+      var animation = (function(handleFrame) {
+        var requestId;
+
+        function run() {
+          handleFrame();
+          scheduleNextFrame();
+        }
+
+        function scheduleNextFrame() {
+          requestId = requestAnimationFrame(run);
+        }
+
+        return {
+          "start": scheduleNextFrame,
+          "stop": function() {
+            cancelAnimationFrame(requestId);
+          }
+        };
+      })(updateProgress);
+
+      var controls = (function() {
+        function play() {
+          song.play();
+          animation.start();
+        }
+
+        function pause() {
+          song.pause();
+          animation.stop();
+        }
+
+        function togglePlayback() {
+          if (song.paused) {
+            play();
+          } else {
+            pause();
+          }
+        }
+
+        function stop() {
+          pause();
+          song.currentTime = 0;
+          updateProgress();
+        }
+
+        function seekTo(time) {
+          song.currentTime = time;
+          updateProgress();
+        }
+
+        function seekBy(offset) {
+          song.currentTime += offset;
+          updateProgress();
+        }
+
+        const seekOffset = 0.5;
+
+        function backward() {
+          seekBy(-seekOffset);
+        }
+
+        function forward() {
+          seekBy(seekOffset);
+        }
+
+        const volumeOffset = 0.1;
+
+        function increaseVolume(diff) {
+          song.volume += diff;
+        }
+
+        function volumeUp() {
+          increaseVolume(volumeOffset);
+        }
+
+        function volumeDown() {
+          increaseVolume(-volumeOffset);
+        }
+
+        $("#play").click(play);
+        $("#pause").click(pause);
+        $("#stop").click(stop);
+        $("#backward").click(backward);
+        $("#forward").click(forward);
+        $("#increaseVolume").click(volumeUp);
+        $("#decreaseVolume").click(volumeDown);
+
+        var keyMapping = {
+          27: stop, // ESC
+          32: togglePlayback, // SPACE
+          37: backward, // LEFT ARROW
+          38: volumeUp, // UP ARROW
+          39: forward, // RIGHT ARROW
+          40: volumeDown // DOWN ARROW
+        }
+
+        $("body").keydown(function(event) {
+          var command = keyMapping[event.which];
+          if (command) {
+            command();
+            event.preventDefault();
+          }
+        });
+
+        return {
+          "play": play,
+          "pause": pause,
+          "stop": stop,
+          "seekTo": seekTo,
+          "backward": backward,
+          "forward": forward,
+          "volumeUp": volumeUp,
+          "volumeDown": volumeDown
+        };
+      })();
+    });
+  </script>
+</body>
+
+</html>

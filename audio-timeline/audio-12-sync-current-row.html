@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Audio player</title>
+  <style type="text/css">
+    #chart, #label {
+      background: #fafafa;
+      border: 1px solid #eee;
+    }
+
+    #progressbar {
+      fill: steelblue;
+    }
+
+    #label {
+      padding: 1em;
+    }
+  </style>
+
+</head>
+
+<body>
+
+  <p>
+    Audio player with synchronously displayed current label from a TSV file
+    with label segments.
+  </p>
+
+  <audio id="song"></audio>
+
+  <svg id="chart"></svg>
+
+  <div>
+    <button id="play">Play [<kbd>SPACE</kbd>]</button>
+    <button id="pause">Pause [<kbd>SPACE</kbd>]</button>
+    <button id="stop">Stop [<kbd>ESC</kbd>]</button>
+    <button id="backward">Backward [<kbd>&larr;</kbd>]</button>
+    <button id="forward">Forward [<kbd>&larr;</kbd>]</button>
+    <button id="increaseVolume">Increase Volume [<kbd>&uarr;</kbd>]</button>
+    <button id="decreaseVolume">Decrease Volume [<kbd>&darr;</kbd>]</button>
+  </div>
+
+  <ul>
+    <li>Labels file:
+      <span id="labelsFile"></span>
+    </li>
+    <li>Audio file:
+      <span id="audioFile"></span>
+    </li>
+    <li>Duration:
+      <span id="duration"></span> s</li>
+    <li>Current time:
+      <span id="currentTime"></span> s (
+      <span id="currentTimePercentage"></span> %)</li>
+    <li>Volume:
+      <span id="volume"></span>
+    </li>
+  </ul>
+
+  <p id="label"></p>
+
+  <script src="jquery.min.js"></script>
+  <script src="d3.v3.min.js" charset="utf-8"></script>
+  <script>
+    var dataRows = [];
+
+    $(document).ready(function() {
+
+      var commonPath = "The_Beatles/03_-_A_Hard_Day's_Night/05_-_And_I_Love_Her";
+
+      var audioFile = "../data-beatles/audio-cd/" + commonPath + ".wav";
+      var labelsFile = "../data-beatles/chordlab/" + commonPath + ".lab.pcs.tsv";
+
+      d3.select("#song").attr("src", audioFile);
+
+      $("#labelsFile").text(labelsFile);
+
+      function parseRow(row) {
+        row.start = +row.start;
+        row.end = +row.end;
+        return row;
+      }
+
+      d3.tsv(labelsFile, parseRow, function(error, data) {
+        dataRows = data;
+      });
+
+      var width = 400,
+        height = 20;
+
+      var x = d3.scale.linear()
+        .domain([0, 100])
+        .range([0, width]);
+
+      var chart = d3.select("#chart")
+        .attr("width", width)
+        .attr("height", height);
+
+      chart.append("rect")
+        .attr("id", "progressbar")
+        .attr("width", 0)
+        .attr("height", height);
+
+      $("#progressbar").attr("width", 50);
+
+      var song = document.getElementById('song');
+
+      var percentFormat = d3.format("0.2f");
+
+      song.onloadeddata = function() {
+        $("#audioFile").text(song.currentSrc);
+      };
+      song.ondurationchange = function() {
+        $("#duration").text(percentFormat(song.duration));
+      };
+      song.onended = function() {
+        clearInterval(intervalId);
+      };
+
+      function percentageToTime(percentage) {
+        return percentage * 0.01 * song.duration;
+      }
+
+      function timeToPercentage(time) {
+        return 100.0 * time / song.duration;
+      }
+
+      function findCurrentRow(rows, time) {
+        function isCurrentRow(row) {
+          return row.start <= song.currentTime && song.currentTime < row.end;
+        }
+        return dataRows.filter(isCurrentRow)[0];
+      }
+
+      function printCurrentRow() {
+        var currentRow = findCurrentRow(dataRows, song.currentTime);
+        $("#label").text(currentRow.start + " " + currentRow.end + " " + currentRow.label);
+      }
+
+      function updateProgress() {
+        $("#currentTime").text(percentFormat(song.currentTime));
+        var timePerc = timeToPercentage(song.currentTime);
+        $("#currentTimePercentage").text(percentFormat(timePerc));
+        d3.select("#progressbar").attr("width", x(timePerc));
+
+        printCurrentRow();
+      };
+      song.onvolumechange = function() {
+        $("#volume").text(percentFormat(song.volume));
+      };
+      song.onvolumechange();
+
+      var intervalId;
+
+      function play() {
+        song.play();
+        intervalId = setInterval(updateProgress, 25);
+      }
+
+      function pause() {
+        song.pause();
+        clearInterval(intervalId);
+        updateProgress();
+      }
+
+      function togglePlayback() {
+        if (song.paused) {
+          play();
+        } else {
+          pause();
+        }
+      }
+
+      function stop() {
+        pause();
+        song.currentTime = 0;
+        updateProgress();
+      }
+
+      function seekTo(time) {
+        song.currentTime = time;
+        updateProgress();
+      }
+
+      function seekBy(offset) {
+        song.currentTime += offset;
+        updateProgress();
+      }
+
+      var seekOffset = 0.5;
+
+      function backward() {
+        seekBy(-seekOffset);
+      }
+
+      function forward() {
+        seekBy(seekOffset);
+      }
+
+      var volumeOffset = 0.1;
+
+      function increaseVolume(diff) {
+        song.volume += diff;
+      }
+
+      function volumeUp() {
+        increaseVolume(volumeOffset);
+      }
+
+      function volumeDown() {
+        increaseVolume(-volumeOffset);
+      }
+
+      $("#play").click(play);
+      $("#pause").click(pause);
+      $("#stop").click(stop);
+      $("#backward").click(backward);
+      $("#forward").click(forward);
+      $("#increaseVolume").click(volumeUp);
+      $("#decreaseVolume").click(volumeDown);
+
+      var keyMapping = {
+        27: stop, // ESC
+        32: togglePlayback, // SPACE
+        37: backward, // LEFT ARROW
+        38: volumeUp, // UP ARROW
+        39: forward, // RIGHT ARROW
+        40: volumeDown // DOWN ARROW
+      }
+
+      $("body").keydown(function(event) {
+        var command = keyMapping[event.which];
+        if (command) {
+          command();
+        }
+      });
+
+      $("#chart").click(function(event) {
+        var timePerc = x.invert(event.offsetX);
+        var time = percentageToTime(timePerc);
+        seekTo(time);
+      });
+    });
+  </script>
+</body>
+
+</html>
